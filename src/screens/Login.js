@@ -70,7 +70,7 @@ export default function Login({ navigation }) {
       Alert.alert("Sucesso", `Bem-vindo, ${usuario.nome.S}!`);
 
       if (tipoUsuario === "admin") {
-        navigation.navigate("HomeAdmin"); // Tela de admin
+        navigation.navigate("Home"); // Tela de admin
       } else {
         navigation.navigate("Home"); // Tela de funcionário
       }

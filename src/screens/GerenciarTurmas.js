@@ -11,73 +11,101 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
-  DynamoDBClient,
   ScanCommand,
   PutItemCommand,
   DeleteItemCommand,
 } from "@aws-sdk/client-dynamodb";
-import dynamoDB  from "../../awsConfig"; 
-
+import dynamoDB from "../../awsConfig";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
 
 export default function GerenciarTurmas() {
+  const navigation = useNavigation();
   const [turmas, setTurmas] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [nomeTurma, setNomeTurma] = useState("");
   const [professor, setProfessor] = useState("");
   const [alunos, setAlunos] = useState("");
   const [loading, setLoading] = useState(false);
+  const [editandoTurma, setEditandoTurma] = useState(null); // 👈 novo estado
 
-  // Carrega as turmas do DynamoDB
   useEffect(() => {
     carregarTurmas();
   }, []);
 
   const carregarTurmas = async () => {
     try {
+      const usuarioString = await AsyncStorage.getItem("usuarioLogado");
+      const usuario = JSON.parse(usuarioString);
+      const professorNome = usuario?.nome;
+      const isAdmin = usuario?.tipo === "admin"; // ✅ verificar se é admin
+
       const comando = new ScanCommand({ TableName: "turmas" });
-      const resultado = await dynamoDB.send(comando);
+      const resultado = await dynamoDB.send(comando); // ✅ usa dynamoDB, não client
+
       const turmasFormatadas = resultado.Items.map((item) => ({
         id: item.id.N,
         nome: item.nome.S,
         professor: item.professor.S,
         alunos: item.alunos ? item.alunos.S.split(",") : [],
       }));
-      setTurmas(turmasFormatadas);
+
+      // ✅ Admin vê todas as turmas
+      const minhasTurmas = isAdmin
+        ? turmasFormatadas
+        : turmasFormatadas.filter((t) => t.professor === professorNome);
+
+      setTurmas(minhasTurmas);
     } catch (erro) {
       console.log("Erro ao carregar turmas:", erro);
       Alert.alert("Erro", "Não foi possível carregar as turmas.");
     }
   };
 
-  const criarTurma = async () => {
-    if (!nomeTurma || !professor) {
-      Alert.alert("Atenção", "Preencha todos os campos obrigatórios.");
+  // 👇 Função para abrir o modal de edição
+  const abrirModalEdicao = (turma) => {
+    setEditandoTurma(turma);
+    setNomeTurma(turma.nome);
+    setProfessor(turma.professor);
+    setAlunos(turma.alunos.join(", "));
+    setModalVisible(true);
+  };
+
+  // 👇 Criar ou editar turma
+  const salvarTurma = async () => {
+    if (!nomeTurma) {
+      Alert.alert("Atenção", "Informe o nome da turma.");
       return;
     }
 
     setLoading(true);
 
-    const id = Date.now().toString();
-    const comando = new PutItemCommand({
-      TableName: "turmas",
-      Item: {
-        id: { N: id },
-        nome: { S: nomeTurma },
-        professor: { S: professor },
-        alunos: { S: alunos },
-      },
-    });
-
     try {
+      const usuarioString = await AsyncStorage.getItem("usuarioLogado");
+      const usuario = JSON.parse(usuarioString);
+      const professorNome = usuario?.nome || "Desconhecido";
+
+      const id = editandoTurma ? editandoTurma.id : Date.now().toString();
+
+      const comando = new PutItemCommand({
+        TableName: "turmas",
+        Item: {
+          id: { N: id },
+          nome: { S: nomeTurma },
+          professor: { S: professorNome },
+          alunos: { S: alunos },
+        },
+      });
+
       await dynamoDB.send(comando);
       setModalVisible(false);
       setNomeTurma("");
-      setProfessor("");
       setAlunos("");
+      setEditandoTurma(null);
       carregarTurmas();
     } catch (erro) {
-      console.log("Erro ao criar turma:", erro);
-      Alert.alert("Erro", "Não foi possível criar a turma.");
+      console.log("Erro ao salvar turma:", erro);
+      Alert.alert("Erro", "Não foi possível salvar a turma.");
     } finally {
       setLoading(false);
     }
@@ -85,19 +113,35 @@ export default function GerenciarTurmas() {
 
   const excluirTurma = async (id) => {
     Alert.alert("Confirmar exclusão", "Deseja realmente excluir esta turma?", [
-      {
-        text: "Cancelar",
-        style: "cancel",
-      },
+      { text: "Cancelar", style: "cancel" },
       {
         text: "Excluir",
         onPress: async () => {
           try {
-            const comando = new DeleteItemCommand({
+            const comandoVerificar = new ScanCommand({
+              TableName: "atividades",
+              FilterExpression: "turmaId = :id",
+              ExpressionAttributeValues: {
+                ":id": { N: id },
+              },
+            });
+
+            const resultado = await dynamoDB.send(comandoVerificar);
+
+            if (resultado.Items.length > 0) {
+              Alert.alert(
+                "Aviso",
+                "Você não pode excluir uma turma com atividades cadastradas."
+              );
+              return;
+            }
+
+            const comandoExcluir = new DeleteItemCommand({
               TableName: "turmas",
               Key: { id: { N: id } },
             });
-            await dynamoDB.send(comando);
+
+            await dynamoDB.send(comandoExcluir);
             carregarTurmas();
           } catch (erro) {
             console.log("Erro ao excluir turma:", erro);
@@ -110,13 +154,6 @@ export default function GerenciarTurmas() {
 
   const renderTurma = ({ item }) => (
     <View style={styles.card}>
-      <TouchableOpacity
-        style={styles.deleteButton}
-        onPress={() => excluirTurma(item.id)}
-      >
-        <Ionicons name="trash-outline" size={20} color="white" />
-      </TouchableOpacity>
-
       <Text style={styles.cardTitle}>{item.nome}</Text>
       <Text style={styles.cardSubtitle}>Professor: {item.professor}</Text>
       <Text style={styles.cardSubtitle}>
@@ -125,6 +162,23 @@ export default function GerenciarTurmas() {
           ? item.alunos.join(", ")
           : "Nenhum aluno registrado"}
       </Text>
+
+      <View style={styles.cardButtons}>
+        {/* 👇 Ícone de EDIÇÃO no lugar do "olho" */}
+        <TouchableOpacity
+          style={styles.editButton}
+          onPress={() => abrirModalEdicao(item)}
+        >
+          <Ionicons name="create-outline" size={20} color="white" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => excluirTurma(item.id)}
+        >
+          <Ionicons name="trash-outline" size={20} color="white" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -132,7 +186,13 @@ export default function GerenciarTurmas() {
     <View style={styles.container}>
       <TouchableOpacity
         style={styles.addButton}
-        onPress={() => setModalVisible(true)}
+        onPress={() => {
+          setEditandoTurma(null);
+          setNomeTurma("");
+          setProfessor("");
+          setAlunos("");
+          setModalVisible(true);
+        }}
       >
         <Ionicons name="add-circle" size={32} color="#fff" />
         <Text style={styles.addButtonText}>Criar Turma</Text>
@@ -145,11 +205,13 @@ export default function GerenciarTurmas() {
         contentContainerStyle={{ paddingBottom: 100 }}
       />
 
-      {/* Modal de criação */}
+      {/* Modal de Criação / Edição */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Nova Turma</Text>
+            <Text style={styles.modalTitle}>
+              {editandoTurma ? "Editar Turma" : "Nova Turma"}
+            </Text>
 
             <TextInput
               style={styles.input}
@@ -162,6 +224,7 @@ export default function GerenciarTurmas() {
               placeholder="Professor Responsável"
               value={professor}
               onChangeText={setProfessor}
+              editable={!editandoTurma} // 👈 bloqueia edição do professor
             />
             <TextInput
               style={styles.input}
@@ -179,7 +242,7 @@ export default function GerenciarTurmas() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.confirmButton}
-                onPress={criarTurma}
+                onPress={salvarTurma}
                 disabled={loading}
               >
                 <Text style={styles.confirmText}>
@@ -236,13 +299,21 @@ const styles = StyleSheet.create({
     color: "#ccc",
     fontSize: 14,
   },
+  cardButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 10,
+  },
+  editButton: {
+    backgroundColor: "#0078D7",
+    borderRadius: 20,
+    padding: 8,
+    marginRight: 10,
+  },
   deleteButton: {
-    position: "absolute",
-    top: 8,
-    right: 8,
     backgroundColor: "#E74C3C",
     borderRadius: 20,
-    padding: 6,
+    padding: 8,
   },
   modalContainer: {
     flex: 1,

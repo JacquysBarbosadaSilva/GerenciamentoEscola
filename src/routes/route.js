@@ -8,6 +8,7 @@ import Login from "../screens/Login";
 import Home from "../screens/Home";
 import GerenciarTurmas from "../screens/GerenciarTurmas";
 import GerenciarUsuarios from "../screens/GerenciarUsuarios";
+import GerenciarAulas from "../screens/GerenciarAulas";
 
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
@@ -51,6 +52,7 @@ function DrawerRoutes() {
     >
       <Drawer.Screen name="Gerenciar Turmas" component={GerenciarTurmas} />
       <Drawer.Screen name="Gerenciar Usuários" component={GerenciarUsuarios} />
+      <Drawer.Screen name="Gerenciar Aulas" component={GerenciarAulas} />
     </Drawer.Navigator>
   );
 }
