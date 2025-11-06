@@ -16,11 +16,11 @@ import {
   PutItemCommand,
   DeleteItemCommand,
 } from "@aws-sdk/client-dynamodb";
+import { Picker } from "@react-native-picker/picker"; // ✅ import do Picker
 import dynamoDB from "../../awsConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 
-// 🎨 Paleta de cores padronizada
 const COLORS = {
   background: "#11274d",
   primary: "#63b8ff",
@@ -28,8 +28,8 @@ const COLORS = {
   text: "#11274d",
   textSecondary: "#333",
   danger: "#E74C3C",
-  inputBackground: "#3A3A3A",
-  modalBackground: "#2C2C2C",
+  inputBackground: "#d0ccccff",
+  modalBackground: "#ffffffff",
   gray: "#777",
 };
 
@@ -39,6 +39,7 @@ export default function GerenciarTurmas() {
   const [modalVisible, setModalVisible] = useState(false);
   const [nomeTurma, setNomeTurma] = useState("");
   const [professor, setProfessor] = useState("");
+  const [professores, setProfessores] = useState([]); // ✅ lista de professores
   const [alunos, setAlunos] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingTurmas, setLoadingTurmas] = useState(true);
@@ -48,6 +49,7 @@ export default function GerenciarTurmas() {
   useEffect(() => {
     const setup = async () => {
       await buscarDadosUsuario();
+      await carregarProfessores(); // ✅ carrega professores
       carregarTurmas();
     };
     setup();
@@ -61,6 +63,29 @@ export default function GerenciarTurmas() {
       }
     } catch (error) {
       console.log("Erro ao buscar usuário logado:", error);
+    }
+  };
+
+  // ✅ Busca apenas usuários do tipo "professor" no DynamoDB
+  const carregarProfessores = async () => {
+    try {
+      const comando = new ScanCommand({
+        TableName: "users",
+        FilterExpression: "tipo = :tipo",
+        ExpressionAttributeValues: {
+          ":tipo": { S: "professor" },
+        },
+      });
+      const resultado = await dynamoDB.send(comando);
+
+      const lista = resultado.Items.map((item) => ({
+        id: item.id.S,
+        nome: item.nome.S,
+      }));
+
+      setProfessores(lista);
+    } catch (erro) {
+      console.log("Erro ao carregar professores:", erro);
     }
   };
 
@@ -135,12 +160,6 @@ export default function GerenciarTurmas() {
         ? usuarioLogado?.nome
         : professor;
 
-      if (!profParaSalvar) {
-        Alert.alert("Erro", "Não foi possível identificar o professor.");
-        setLoading(false);
-        return;
-      }
-
       const id = editandoTurma ? editandoTurma.id : Date.now().toString();
 
       const comando = new PutItemCommand({
@@ -172,75 +191,33 @@ export default function GerenciarTurmas() {
     setEditandoTurma(null);
   };
 
-  const excluirTurma = async (id) => {
-    Alert.alert("Confirmar exclusão", "Deseja realmente excluir esta turma?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Excluir",
-        onPress: async () => {
-          try {
-            const comandoVerificar = new ScanCommand({
-              TableName: "atividades",
-              FilterExpression: "turmaId = :id",
-              ExpressionAttributeValues: {
-                ":id": { N: id },
-              },
-            });
+  // 🔽 Campo "Professor Responsável" atualizado:
+  const renderCampoProfessor = () => {
+    if (usuarioLogado?.tipo !== "admin") {
+      return (
+        <TextInput
+          style={[styles.input, styles.disabledInput]}
+          value={usuarioLogado?.nome || ""}
+          editable={false}
+        />
+      );
+    }
 
-            const resultado = await dynamoDB.send(comandoVerificar);
-
-            if (resultado.Items.length > 0) {
-              Alert.alert(
-                "Aviso",
-                "Você não pode excluir uma turma com atividades cadastradas."
-              );
-              return;
-            }
-
-            const comandoExcluir = new DeleteItemCommand({
-              TableName: "turmas",
-              Key: { id: { N: id } },
-            });
-
-            await dynamoDB.send(comandoExcluir);
-            carregarTurmas();
-          } catch (erro) {
-            console.log("Erro ao excluir turma:", erro);
-            Alert.alert("Erro", "Não foi possível excluir a turma.");
-          }
-        },
-      },
-    ]);
-  };
-
-  const renderTurma = ({ item }) => (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>{item.nome}</Text>
-      <Text style={styles.cardSubtitle}>Professor: {item.professor}</Text>
-      <Text style={styles.cardSubtitle}>
-        Alunos:{" "}
-        {item.alunos.length > 0
-          ? item.alunos.join(", ")
-          : "Nenhum aluno registrado"}
-      </Text>
-
-      <View style={styles.cardButtons}>
-        <TouchableOpacity
-          style={styles.editButton}
-          onPress={() => abrirModalEdicao(item)}
+    return (
+      <View style={styles.pickerContainer}>
+        <Picker
+          selectedValue={professor}
+          onValueChange={(itemValue) => setProfessor(itemValue)}
+          style={styles.picker}
         >
-          <Ionicons name="create-outline" size={20} color={COLORS.text} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => excluirTurma(item.id)}
-        >
-          <Ionicons name="trash-outline" size={20} color={COLORS.text} />
-        </TouchableOpacity>
+          <Picker.Item label="Selecione um professor" value="" />
+          {professores.map((p) => (
+            <Picker.Item key={p.id} label={p.nome} value={p.nome} />
+          ))}
+        </Picker>
       </View>
-    </View>
-  );
+    );
+  };
 
   if (loadingTurmas) {
     return (
@@ -261,7 +238,34 @@ export default function GerenciarTurmas() {
       <FlatList
         data={turmas}
         keyExtractor={(item) => item.id}
-        renderItem={renderTurma}
+        renderItem={({ item }) => (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>{item.nome}</Text>
+            <Text style={styles.cardSubtitle}>Professor: {item.professor}</Text>
+            <Text style={styles.cardSubtitle}>
+              Alunos:{" "}
+              {item.alunos.length > 0
+                ? item.alunos.join(", ")
+                : "Nenhum aluno registrado"}
+            </Text>
+
+            <View style={styles.cardButtons}>
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => abrirModalEdicao(item)}
+              >
+                <Ionicons name="create-outline" size={20} color={COLORS.text} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => excluirTurma(item.id)}
+              >
+                <Ionicons name="trash-outline" size={20} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
         ListEmptyComponent={() => (
           <Text style={styles.emptyListText}>Nenhuma turma encontrada.</Text>
         )}
@@ -283,22 +287,7 @@ export default function GerenciarTurmas() {
               onChangeText={setNomeTurma}
             />
 
-            <TextInput
-              style={[
-                styles.input,
-                (editandoTurma || usuarioLogado?.tipo !== "admin") &&
-                  styles.disabledInput,
-              ]}
-              placeholder={
-                editandoTurma
-                  ? `Professor: ${editandoTurma.professor}`
-                  : "Professor Responsável (Apenas Admin preenche)"
-              }
-              placeholderTextColor={COLORS.textSecondary}
-              value={editandoTurma ? editandoTurma.professor : professor}
-              onChangeText={setProfessor}
-              editable={!editandoTurma && usuarioLogado?.tipo === "admin"}
-            />
+            {renderCampoProfessor()}
 
             <TextInput
               style={styles.input}
@@ -311,10 +300,7 @@ export default function GerenciarTurmas() {
             />
 
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={fecharModal}
-              >
+              <TouchableOpacity style={styles.cancelButton} onPress={fecharModal}>
                 <Text style={styles.cancelText}>Cancelar</Text>
               </TouchableOpacity>
 
@@ -481,5 +467,19 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontWeight: "bold",
     fontSize: 16,
+  },
+
+    pickerContainer: {
+    backgroundColor: COLORS.inputBackground,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  picker: {
+    color: COLORS.text,
+  },
+  label: {
+    color: COLORS.textSecondary,
+    marginLeft: 10,
+    marginTop: 6,
   },
 });
