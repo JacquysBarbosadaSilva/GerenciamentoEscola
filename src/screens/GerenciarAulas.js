@@ -22,9 +22,22 @@ import dynamoDB from "../../awsConfig";
 const TURMAS_TABLENAME = "turmas";
 const ATIVIDADES_TABLENAME = "atividades";
 
+// PALETA DE CORES CONSISTENTE (Do GerenciarUsuarios)
+const COLORS = {
+  background: "#11274d", // Azul Escuro (Fundo principal)
+  cardBackground: "#fff", // Branco (Fundo dos cards e modal)
+  inputBackground: "#f0f0f0", // Cinza Claro (Fundo dos inputs)
+  primary: "#63b8ff", // Azul Vibrante (Botão principal/Salvar)
+  accent: "#F2BE5B", // Amarelo/Laranja (Destaque/Edição)
+  danger: "#E74C3C", // Vermelho (Exclusão)
+  textDark: "#11274d", // Texto Escuro
+  textLight: "#333", // Texto Secundário
+};
+
 const formatNumero = (index) => String(index + 1).padStart(2, "0");
 
 export default function GerenciarAulas({ navigation }) {
+  // --- ESTADOS (ORIGINAIS) ---
   const [usuarioLogado, setUsuarioLogado] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -39,7 +52,19 @@ export default function GerenciarAulas({ navigation }) {
   const podeGerenciar =
     usuarioLogado?.tipo === "admin" || usuarioLogado?.tipo === "professor";
 
-
+  // --- FUNÇÕES DE LÓGICA (ORIGINAIS) ---
+  const handleLogout = async () => {
+    Alert.alert("Sair", "Deseja realmente sair?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Sair",
+        onPress: async () => {
+          await AsyncStorage.removeItem("usuarioLogado");
+          navigation.replace("Login");
+        },
+      },
+    ]);
+  };
 
   const carregarDadosEFiltrarTurmas = useCallback(async () => {
     setLoading(true);
@@ -74,11 +99,11 @@ export default function GerenciarAulas({ navigation }) {
       const usuarioBanco = resultadoUser.Items[0];
       const tipoUsuario = usuarioBanco.tipo?.S || "professor";
 
-      // 🧩 Lógica: Admin → todas as turmas / Professor → apenas a turma dele
+      // 🧩 Lógica: Admin → todas as turmas / Professor → apenas a turma dele (ORIGINAL)
       if (tipoUsuario === "admin") {
         // 🔹 Admin: busca todas as turmas
         const comandoTurmas = new ScanCommand({
-          TableName: "turmas",
+          TableName: TURMAS_TABLENAME,
         });
 
         const resultadoTurmas = await dynamoDB.send(comandoTurmas);
@@ -90,12 +115,13 @@ export default function GerenciarAulas({ navigation }) {
         }));
 
         setTurmas(turmasConvertidas);
-        setTurmaSelecionada(null); // admin escolhe depois
+        setTurmaSelecionada(null); // admin escolhe depois (ORIGINAL)
       } else {
-        // 👨‍🏫 Professor: usa apenas a turma vinculada no campo turmaProfessor
+        // 👨‍🏫 Professor/Aluno: usa apenas a turma vinculada ou um card de atividades
         const turma = {
           id: usuarioBanco.id?.N || Date.now().toString(),
-          nome: usuarioBanco.turmaProfessor?.S || "Sem turma",
+          // Se for aluno, o nome da turma é a "turmaProfessor" de fato, mas no código original essa lógica está simplificada:
+          nome: usuarioBanco.turmaProfessor?.S || "Minhas Atividades",
           professorNome: usuarioBanco.nome?.S || "Desconhecido",
         };
 
@@ -229,7 +255,8 @@ export default function GerenciarAulas({ navigation }) {
     setModoEdicao(item.id);
     setModalVisible(true);
   };
-
+  
+  // --- USE EFFECTS (ORIGINAIS) ---
   useEffect(() => {
     carregarDadosEFiltrarTurmas();
   }, [carregarDadosEFiltrarTurmas]);
@@ -240,27 +267,34 @@ export default function GerenciarAulas({ navigation }) {
     }
   }, [turmaSelecionada, carregarAtividades]);
 
+
+  // --- Renderização de Telas (VISUAL ATUALIZADO) ---
+
+  // Estado de Loading
   if (
     loading &&
     (!usuarioLogado || (turmas.length === 0 && !turmaSelecionada))
   ) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0078D7" />
+        <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>Carregando dados...</Text>
       </View>
     );
   }
 
+  // Estado de Seleção de Turma (Admin)
   if (!turmaSelecionada && usuarioLogado) {
     return (
       <View style={styles.container}>
         <Text style={styles.mainTitle}>
+          {/* Lógica original para exibir título (mantida) */}
           {usuarioLogado?.tipo === "admin"
             ? "Selecione uma Turma"
             : `Turma: ${turmaSelecionada?.nome}`}
         </Text>
 
+        {/* Informações da Turma (Visualmente aprimoradas) */}
         {turmaSelecionada && (
           <View style={styles.infoContainer}>
             <Text style={styles.infoText}>
@@ -273,22 +307,24 @@ export default function GerenciarAulas({ navigation }) {
             )}
           </View>
         )}
+        
+        {/* Lista de Turmas */}
         <FlatList
           data={turmas}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <TouchableOpacity
-              style={styles.card}
+              style={styles.turmaCard} // Novo estilo de card
               onPress={() => handleSelecionarTurma(item)}
             >
-              <Ionicons name="school-outline" size={30} color="#0078D7" />
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.cardTitle}>{item.nome}</Text>
-                <Text style={styles.cardSubtitle}>
+              <Ionicons name="school-outline" size={30} color={COLORS.primary} />
+              <View style={{ flex: 1, marginLeft: 15 }}>
+                <Text style={styles.turmaCardTitle}>{item.nome}</Text>
+                <Text style={styles.turmaCardSubtitle}>
                   Professor: {item.professorNome}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward-outline" size={24} color="#ccc" />
+              <Ionicons name="chevron-forward-outline" size={24} color={COLORS.textLight} />
             </TouchableOpacity>
           )}
           contentContainerStyle={{ paddingBottom: 20 }}
@@ -298,10 +334,16 @@ export default function GerenciarAulas({ navigation }) {
             </Text>
           }
         />
+        {/* Botão de Logout para a tela de seleção */}
+        <TouchableOpacity style={styles.logoutFixedButton} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={24} color={COLORS.danger} />
+          <Text style={styles.logoutFixedText}>Sair</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
+  // Renderização do Card de Atividade (VISUAL ATUALIZADO)
   const renderAtividade = ({ item, index }) => (
     <View style={styles.activityCard}>
       <Text style={styles.activityNumber}>{formatNumero(index)}</Text>
@@ -312,36 +354,45 @@ export default function GerenciarAulas({ navigation }) {
       {podeGerenciar && (
         <View style={styles.actionButtons}>
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: "#F39C12" }]}
+            style={[styles.actionButton, { backgroundColor: COLORS.accent }]}
             onPress={() => handleOpenModalToEdit(item)}
           >
-            <Ionicons name="create-outline" size={20} color="white" />
+            <Ionicons name="create-outline" size={20} color={COLORS.textDark} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: "#E74C3C" }]}
+            style={[styles.actionButton, { backgroundColor: COLORS.danger }]}
             onPress={() => excluirAtividade(item.id)}
           >
-            <Ionicons name="trash-outline" size={20} color="white" />
+            <Ionicons name="trash-outline" size={20} color={COLORS.cardBackground} />
           </TouchableOpacity>
         </View>
       )}
     </View>
   );
 
+  // Estado de Lista de Atividades (Professor/Aluno/Admin após seleção)
   return (
     <View style={styles.container}>
+      
+      {/* Cabeçalho */}
       <View style={styles.header}>
+        {/* Lógica original: voltar para seleção de turma */}
         <TouchableOpacity
           onPress={() => setTurmaSelecionada(null)}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-          <Text style={styles.backButtonText}>Turmas</Text>
+          <Ionicons name="arrow-back" size={24} color={COLORS.textDark} />
+          <Text style={styles.backButtonText}>Voltar</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={24} color={COLORS.cardBackground} />
         </TouchableOpacity>
       </View>
 
       <Text style={styles.headerTitle}>
+        {/* Lógica original para exibir título */}
         {usuarioLogado?.tipo === "aluno"
           ? "Minhas Atividades"
           : "Gerenciar Atividades"}
@@ -352,16 +403,18 @@ export default function GerenciarAulas({ navigation }) {
         Professor: {turmaSelecionada.professorNome}
       </Text>
 
+      {/* Botão de Adicionar Atividade (Funcionalidade original mantida) */}
       {podeGerenciar && (
         <TouchableOpacity
           style={styles.addButton}
           onPress={handleOpenModalToCreate}
         >
-          <Ionicons name="add-circle" size={24} color="#fff" />
+          <Ionicons name="add-circle" size={24} color={COLORS.textDark} />
           <Text style={styles.addButtonText}>Cadastrar Atividade</Text>
         </TouchableOpacity>
       )}
 
+      {/* Lista de Atividades */}
       <FlatList
         data={atividades}
         keyExtractor={(item) => item.id}
@@ -376,6 +429,7 @@ export default function GerenciarAulas({ navigation }) {
         }
       />
 
+      {/* Modal de criação/edição (Funcionalidade original mantida) */}
       {podeGerenciar && (
         <Modal visible={modalVisible} animationType="slide" transparent>
           <View style={styles.modalContainer}>
@@ -398,7 +452,7 @@ export default function GerenciarAulas({ navigation }) {
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={styles.cancelButton}
-                  onPress={() => setModalVisible(false)}
+                  onPress={() => setModalVisible(false)} // Função original
                   disabled={loading}
                 >
                   <Text style={styles.cancelText}>Cancelar</Text>
@@ -406,8 +460,8 @@ export default function GerenciarAulas({ navigation }) {
 
                 <TouchableOpacity
                   style={styles.confirmButton}
-                  onPress={salvarAtividade}
-                  disabled={loading || !descricao}
+                  onPress={salvarAtividade} // Função original
+                  disabled={loading || !descricao} // Lógica original
                 >
                   <Text style={styles.confirmText}>
                     {loading
@@ -426,111 +480,156 @@ export default function GerenciarAulas({ navigation }) {
   );
 }
 
+// --- ESTILOS ATUALIZADOS ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#101820FF",
+    backgroundColor: COLORS.background, // Fundo principal azul escuro
     padding: 16,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#101820FF",
+    backgroundColor: COLORS.background,
   },
-  loadingText: { color: "#fff", marginTop: 10, fontSize: 16 },
+  loadingText: { color: COLORS.cardBackground, marginTop: 10, fontSize: 16 },
+  
+  // --- Estilos de Título e Informação ---
   mainTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: "bold",
-    color: "#fff",
+    color: COLORS.cardBackground,
     marginBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#0078D7",
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.primary, 
     paddingBottom: 10,
+    textAlign: 'center',
   },
-  card: {
-    backgroundColor: "#1E1E1E",
+  infoContainer: {
+    marginBottom: 15,
+    padding: 10,
+    backgroundColor: '#1c355e', // Fundo levemente diferente para informações
+    borderRadius: 8,
+  },
+  infoText: {
+    color: '#fff',
+    fontSize: 14,
+  },
+
+  // --- Estilos para Seleção de Turma ---
+  turmaCard: {
+    backgroundColor: COLORS.cardBackground,
     flexDirection: "row",
     alignItems: "center",
-    padding: 15,
+    padding: 18,
     borderRadius: 12,
     marginBottom: 10,
     elevation: 3,
     shadowColor: "#000",
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  cardTitle: { fontSize: 18, color: "#fff", fontWeight: "bold" },
-  cardSubtitle: { color: "#ccc", fontSize: 13, marginTop: 4 },
+  turmaCardTitle: { fontSize: 18, color: COLORS.textDark, fontWeight: "bold" },
+  turmaCardSubtitle: { color: COLORS.textLight, fontSize: 13, marginTop: 4 },
+  logoutFixedButton: {
+    position: 'absolute',
+    bottom: 40,
+    right: 30,
+    backgroundColor: COLORS.cardBackground,
+    padding: 15,
+    borderRadius: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 10,
+  },
+  logoutFixedText: { color: COLORS.danger, marginLeft: 5, fontWeight: 'bold' },
+  
+  // --- Estilos de Cabeçalho e Botões de Ação ---
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 15,
   },
   backButton: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 5,
-    backgroundColor: "#333",
+    padding: 8,
+    backgroundColor: COLORS.cardBackground, 
     borderRadius: 8,
+    shadowOpacity: 0.1,
+    elevation: 2,
   },
   backButtonText: {
-    color: "#fff",
+    color: COLORS.textDark,
     marginLeft: 5,
     fontWeight: "bold",
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: "bold",
-    color: "#fff",
+    color: COLORS.cardBackground,
+    marginBottom: 8,
   },
   turmaNome: {
-    fontSize: 16,
-    color: "#ccc",
-    marginBottom: 8,
+    fontSize: 18,
+    color: COLORS.primary,
+    marginBottom: 4,
+    fontWeight: 'bold',
   },
   professorNome: {
     fontSize: 14,
-    color: "#0078D7",
-    marginBottom: 16,
+    color: "#ccc",
+    marginBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#0078D7",
-    paddingBottom: 5,
+    borderBottomColor: "#334",
+    paddingBottom: 8,
   },
   logoutButton: {
     padding: 8,
     borderRadius: 8,
+    backgroundColor: COLORS.danger, 
   },
   addButton: {
-    backgroundColor: "#0078D7",
+    backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    padding: 12,
+    padding: 14,
     borderRadius: 12,
     marginBottom: 20,
+    shadowOpacity: 0.2,
+    elevation: 3,
   },
   addButtonText: {
-    color: "#fff",
+    color: COLORS.textDark, 
     fontSize: 18,
     marginLeft: 8,
     fontWeight: "bold",
   },
+  
+  // --- Estilos de Card de Atividade ---
   activityCard: {
-    backgroundColor: "#1E1E1E",
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    elevation: 5,
+    elevation: 4,
+    shadowOpacity: 0.1,
   },
   activityNumber: {
     fontSize: 32,
-    fontWeight: "bold",
-    color: "#0078D7",
+    fontWeight: "800",
+    color: COLORS.primary, 
     marginRight: 15,
+    width: 40,
+    textAlign: 'center',
   },
   activityContent: {
     flex: 1,
@@ -538,7 +637,7 @@ const styles = StyleSheet.create({
   },
   activityCardTitle: {
     fontSize: 16,
-    color: "#fff",
+    color: COLORS.textDark,
     fontWeight: "600",
   },
   actionButtons: {
@@ -555,31 +654,36 @@ const styles = StyleSheet.create({
     marginTop: 50,
     fontSize: 16,
   },
+
+  // --- Estilos de Modal ---
   modalContainer: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center",
     alignItems: "center",
   },
   modalContent: {
-    backgroundColor: "#fff",
-    width: "85%",
+    backgroundColor: COLORS.cardBackground,
+    width: "90%",
+    maxWidth: 400,
     borderRadius: 16,
-    padding: 20,
+    padding: 25,
+    shadowOpacity: 0.25,
+    elevation: 10,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "bold",
-    color: "#333",
-    marginBottom: 12,
+    color: COLORS.textDark,
+    marginBottom: 16,
     textAlign: "center",
   },
   input: {
-    backgroundColor: "#f2f2f2",
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 10,
-    color: "#333",
+    backgroundColor: COLORS.inputBackground,
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 15,
+    color: COLORS.textDark,
     minHeight: 100,
     textAlignVertical: "top",
   },
@@ -590,18 +694,24 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     backgroundColor: "#ccc",
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: 8,
+    borderRadius: 10,
+    flex: 1,
+    marginRight: 10,
+    alignItems: 'center',
   },
   confirmButton: {
-    backgroundColor: "#0078D7",
-    paddingVertical: 10,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: 8,
+    borderRadius: 10,
+    flex: 1,
+    marginLeft: 10,
+    alignItems: 'center',
   },
   cancelText: {
-    color: "#333",
+    color: COLORS.textDark,
     fontWeight: "bold",
   },
   confirmText: {

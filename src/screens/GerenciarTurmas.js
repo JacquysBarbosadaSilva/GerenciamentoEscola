@@ -8,6 +8,7 @@ import {
   Modal,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -19,6 +20,19 @@ import dynamoDB from "../../awsConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 
+// 🎨 Paleta de cores padronizada
+const COLORS = {
+  background: "#11274d",
+  primary: "#63b8ff",
+  secondary: "#fff",
+  text: "#11274d",
+  textSecondary: "#333",
+  danger: "#E74C3C",
+  inputBackground: "#3A3A3A",
+  modalBackground: "#2C2C2C",
+  gray: "#777",
+};
+
 export default function GerenciarTurmas() {
   const navigation = useNavigation();
   const [turmas, setTurmas] = useState([]);
@@ -27,30 +41,51 @@ export default function GerenciarTurmas() {
   const [professor, setProfessor] = useState("");
   const [alunos, setAlunos] = useState("");
   const [loading, setLoading] = useState(false);
-  const [editandoTurma, setEditandoTurma] = useState(null); // 👈 novo estado
+  const [loadingTurmas, setLoadingTurmas] = useState(true);
+  const [editandoTurma, setEditandoTurma] = useState(null);
+  const [usuarioLogado, setUsuarioLogado] = useState(null);
 
   useEffect(() => {
-    carregarTurmas();
+    const setup = async () => {
+      await buscarDadosUsuario();
+      carregarTurmas();
+    };
+    setup();
   }, []);
 
+  const buscarDadosUsuario = async () => {
+    try {
+      const usuarioString = await AsyncStorage.getItem("usuarioLogado");
+      if (usuarioString) {
+        setUsuarioLogado(JSON.parse(usuarioString));
+      }
+    } catch (error) {
+      console.log("Erro ao buscar usuário logado:", error);
+    }
+  };
+
   const carregarTurmas = async () => {
+    setLoadingTurmas(true);
     try {
       const usuarioString = await AsyncStorage.getItem("usuarioLogado");
       const usuario = JSON.parse(usuarioString);
       const professorNome = usuario?.nome;
-      const isAdmin = usuario?.tipo === "admin"; // ✅ verificar se é admin
+      const isAdmin = usuario?.tipo === "admin";
 
       const comando = new ScanCommand({ TableName: "turmas" });
-      const resultado = await dynamoDB.send(comando); // ✅ usa dynamoDB, não client
+      const resultado = await dynamoDB.send(comando);
 
       const turmasFormatadas = resultado.Items.map((item) => ({
         id: item.id.N,
         nome: item.nome.S,
         professor: item.professor.S,
-        alunos: item.alunos ? item.alunos.S.split(",") : [],
+        alunos: item.alunos
+          ? item.alunos.S.split(",")
+              .map((a) => a.trim())
+              .filter((a) => a.length > 0)
+          : [],
       }));
 
-      // ✅ Admin vê todas as turmas
       const minhasTurmas = isAdmin
         ? turmasFormatadas
         : turmasFormatadas.filter((t) => t.professor === professorNome);
@@ -59,10 +94,11 @@ export default function GerenciarTurmas() {
     } catch (erro) {
       console.log("Erro ao carregar turmas:", erro);
       Alert.alert("Erro", "Não foi possível carregar as turmas.");
+    } finally {
+      setLoadingTurmas(false);
     }
   };
 
-  // 👇 Função para abrir o modal de edição
   const abrirModalEdicao = (turma) => {
     setEditandoTurma(turma);
     setNomeTurma(turma.nome);
@@ -71,19 +107,39 @@ export default function GerenciarTurmas() {
     setModalVisible(true);
   };
 
-  // 👇 Criar ou editar turma
+  const abrirModalCriacao = () => {
+    setEditandoTurma(null);
+    setNomeTurma("");
+    setAlunos("");
+
+    if (usuarioLogado?.tipo !== "admin") {
+      setProfessor(usuarioLogado?.nome || "");
+    } else {
+      setProfessor("");
+    }
+
+    setModalVisible(true);
+  };
+
   const salvarTurma = async () => {
-    if (!nomeTurma) {
-      Alert.alert("Atenção", "Informe o nome da turma.");
+    if (!nomeTurma || (usuarioLogado?.tipo === "admin" && !professor)) {
+      Alert.alert("Atenção", "Preencha o nome da turma e o professor.");
       return;
     }
 
     setLoading(true);
-
     try {
-      const usuarioString = await AsyncStorage.getItem("usuarioLogado");
-      const usuario = JSON.parse(usuarioString);
-      const professorNome = usuario?.nome || "Desconhecido";
+      const profParaSalvar = editandoTurma
+        ? editandoTurma.professor
+        : usuarioLogado?.tipo !== "admin"
+        ? usuarioLogado?.nome
+        : professor;
+
+      if (!profParaSalvar) {
+        Alert.alert("Erro", "Não foi possível identificar o professor.");
+        setLoading(false);
+        return;
+      }
 
       const id = editandoTurma ? editandoTurma.id : Date.now().toString();
 
@@ -92,16 +148,13 @@ export default function GerenciarTurmas() {
         Item: {
           id: { N: id },
           nome: { S: nomeTurma },
-          professor: { S: professorNome },
-          alunos: { S: alunos },
+          professor: { S: profParaSalvar },
+          alunos: { S: alunos.trim() },
         },
       });
 
       await dynamoDB.send(comando);
-      setModalVisible(false);
-      setNomeTurma("");
-      setAlunos("");
-      setEditandoTurma(null);
+      fecharModal();
       carregarTurmas();
     } catch (erro) {
       console.log("Erro ao salvar turma:", erro);
@@ -109,6 +162,14 @@ export default function GerenciarTurmas() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fecharModal = () => {
+    setModalVisible(false);
+    setNomeTurma("");
+    setProfessor("");
+    setAlunos("");
+    setEditandoTurma(null);
   };
 
   const excluirTurma = async (id) => {
@@ -164,49 +225,50 @@ export default function GerenciarTurmas() {
       </Text>
 
       <View style={styles.cardButtons}>
-        {/* 👇 Ícone de EDIÇÃO no lugar do "olho" */}
         <TouchableOpacity
           style={styles.editButton}
           onPress={() => abrirModalEdicao(item)}
         >
-          <Ionicons name="create-outline" size={20} color="white" />
+          <Ionicons name="create-outline" size={20} color={COLORS.text} />
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.deleteButton}
           onPress={() => excluirTurma(item.id)}
         >
-          <Ionicons name="trash-outline" size={20} color="white" />
+          <Ionicons name="trash-outline" size={20} color={COLORS.text} />
         </TouchableOpacity>
       </View>
     </View>
   );
 
+  if (loadingTurmas) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Carregando turmas...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => {
-          setEditandoTurma(null);
-          setNomeTurma("");
-          setProfessor("");
-          setAlunos("");
-          setModalVisible(true);
-        }}
-      >
-        <Ionicons name="add-circle" size={32} color="#fff" />
-        <Text style={styles.addButtonText}>Criar Turma</Text>
+      <TouchableOpacity style={styles.addButton} onPress={abrirModalCriacao}>
+        <Ionicons name="add-circle" size={24} color={COLORS.text} />
+        <Text style={styles.addButtonText}>Criar Nova Turma</Text>
       </TouchableOpacity>
 
       <FlatList
         data={turmas}
         keyExtractor={(item) => item.id}
         renderItem={renderTurma}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        ListEmptyComponent={() => (
+          <Text style={styles.emptyListText}>Nenhuma turma encontrada.</Text>
+        )}
+        contentContainerStyle={styles.flatListContent}
       />
 
-      {/* Modal de Criação / Edição */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      <Modal visible={modalVisible} animationType="fade" transparent>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>
@@ -215,39 +277,59 @@ export default function GerenciarTurmas() {
 
             <TextInput
               style={styles.input}
-              placeholder="Nome da Turma"
+              placeholder="Nome da Turma (Ex: 1° Ano - Manhã)"
+              placeholderTextColor={COLORS.textSecondary}
               value={nomeTurma}
               onChangeText={setNomeTurma}
             />
+
             <TextInput
-              style={styles.input}
-              placeholder="Professor Responsável"
-              value={professor}
+              style={[
+                styles.input,
+                (editandoTurma || usuarioLogado?.tipo !== "admin") &&
+                  styles.disabledInput,
+              ]}
+              placeholder={
+                editandoTurma
+                  ? `Professor: ${editandoTurma.professor}`
+                  : "Professor Responsável (Apenas Admin preenche)"
+              }
+              placeholderTextColor={COLORS.textSecondary}
+              value={editandoTurma ? editandoTurma.professor : professor}
               onChangeText={setProfessor}
-              editable={!editandoTurma} // 👈 bloqueia edição do professor
+              editable={!editandoTurma && usuarioLogado?.tipo === "admin"}
             />
+
             <TextInput
               style={styles.input}
-              placeholder="Alunos (separe por vírgulas)"
+              placeholder="Alunos (separe os nomes por vírgulas)"
+              placeholderTextColor={COLORS.textSecondary}
               value={alunos}
               onChangeText={setAlunos}
+              multiline
+              numberOfLines={3}
             />
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() => setModalVisible(false)}
+                onPress={fecharModal}
               >
                 <Text style={styles.cancelText}>Cancelar</Text>
               </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.confirmButton}
                 onPress={salvarTurma}
                 disabled={loading}
               >
-                <Text style={styles.confirmText}>
-                  {loading ? "Salvando..." : "Salvar"}
-                </Text>
+                {loading ? (
+                  <ActivityIndicator color={COLORS.text} />
+                ) : (
+                  <Text style={styles.confirmText}>
+                    {editandoTurma ? "Atualizar" : "Salvar"}
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -260,108 +342,144 @@ export default function GerenciarTurmas() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#101820FF",
-    padding: 16,
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    color: COLORS.primary,
+    marginTop: 10,
+    fontSize: 16,
+  },
+  flatListContent: {
+    paddingBottom: 100,
+  },
+  emptyListText: {
+    color: COLORS.textSecondary,
+    textAlign: "center",
+    marginTop: 50,
+    fontSize: 16,
   },
   addButton: {
-    backgroundColor: "#0078D7",
+    backgroundColor: COLORS.primary,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    padding: 12,
+    padding: 14,
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 20,
+    elevation: 6,
   },
   addButtonText: {
-    color: "#fff",
+    color: COLORS.text,
     fontSize: 18,
-    marginLeft: 8,
+    marginLeft: 10,
     fontWeight: "bold",
   },
   card: {
-    backgroundColor: "#1E1E1E",
+    backgroundColor: COLORS.secondary,
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 5,
-    position: "relative",
+    padding: 18,
+    marginBottom: 15,
+    borderColor: "#333",
+    borderWidth: 1,
+    elevation: 8,
   },
   cardTitle: {
-    fontSize: 20,
-    color: "#fff",
-    fontWeight: "bold",
-    marginBottom: 4,
+    fontSize: 22,
+    color: COLORS.text,
+    fontWeight: "900",
+    marginBottom: 6,
   },
   cardSubtitle: {
-    color: "#ccc",
-    fontSize: 14,
+    color: COLORS.textSecondary,
+    fontSize: 15,
+    lineHeight: 20,
   },
   cardButtons: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    marginTop: 10,
+    marginTop: 15,
   },
   editButton: {
-    backgroundColor: "#0078D7",
-    borderRadius: 20,
-    padding: 8,
-    marginRight: 10,
+    backgroundColor: COLORS.primary,
+    borderRadius: 25,
+    padding: 10,
+    marginRight: 12,
   },
   deleteButton: {
-    backgroundColor: "#E74C3C",
-    borderRadius: 20,
-    padding: 8,
+    backgroundColor: COLORS.danger,
+    borderRadius: 25,
+    padding: 10,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(0,0,0,0.8)",
     justifyContent: "center",
     alignItems: "center",
   },
   modalContent: {
-    backgroundColor: "#fff",
-    width: "85%",
+    backgroundColor: COLORS.modalBackground,
+    width: "90%",
     borderRadius: 16,
-    padding: 20,
+    padding: 25,
+    elevation: 15,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "bold",
-    color: "#333",
-    marginBottom: 12,
+    color: COLORS.text,
+    marginBottom: 15,
     textAlign: "center",
   },
   input: {
-    backgroundColor: "#f2f2f2",
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 10,
+    backgroundColor: COLORS.inputBackground,
+    color: COLORS.text,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    fontSize: 16,
+  },
+  disabledInput: {
+    backgroundColor: "#4A4A4A",
+    color: COLORS.textSecondary,
   },
   modalButtons: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "space-around",
+    marginTop: 15,
   },
   cancelButton: {
-    backgroundColor: "#ccc",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    backgroundColor: COLORS.gray,
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 10,
+    flex: 1,
+    marginRight: 10,
+    alignItems: "center",
   },
   confirmButton: {
-    backgroundColor: "#0078D7",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 10,
+    flex: 1,
+    alignItems: "center",
   },
   cancelText: {
-    color: "#333",
+    color: COLORS.text,
     fontWeight: "bold",
+    fontSize: 16,
   },
   confirmText: {
-    color: "#fff",
+    color: COLORS.text,
     fontWeight: "bold",
+    fontSize: 16,
   },
 });

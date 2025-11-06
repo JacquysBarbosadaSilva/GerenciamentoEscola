@@ -1,6 +1,13 @@
 import React, { useState } from "react";
 import { 
-  View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, ActivityIndicator 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  StyleSheet, 
+  Alert, 
+  Image, 
+  ActivityIndicator 
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -8,8 +15,7 @@ import dynamoDB from "../../awsConfig";
 import { ScanCommand } from "@aws-sdk/client-dynamodb";
 import bcrypt from "bcryptjs";
 
-// Importe se tiver ícones (ex: 'react-native-vector-icons/Feather')
-// import Icon from 'react-native-vector-icons/Feather';
+// import Icon from 'react-native-vector-icons/Feather'; // Caso queira usar ícones
 
 export default function Login({ navigation }) {
   const [email, setEmail] = useState("");
@@ -88,17 +94,17 @@ export default function Login({ navigation }) {
   return (
     <SafeAreaView style={styles.fullContainer}>
       <View style={styles.loginCard}>
-        {/* Adicione a imagem ou logo se necessário, ou mantenha a original fora do card */}
+        {/* Logo ou imagem */}
         <Image 
-          source={require("../assets/lyraback.png")} // Ajuste o caminho se necessário
+          source={require("../assets/lyraback.png")} 
           style={styles.logo} 
         />
+
         <Text style={styles.title}>Bem-vindo</Text>
         <Text style={styles.subtitle}>Faça login na sua conta Lyra</Text>
 
         {/* Campo de Email */}
         <View style={styles.inputContainer}>
-          {/* Onde um Ícone iria, se fosse usar. Mantenha o estilo para alinhamento. */}
           {/* <Icon name="mail" size={20} color="#888" style={styles.icon} /> */}
           <TextInput
             style={styles.input}
@@ -137,10 +143,13 @@ export default function Login({ navigation }) {
           )}
         </TouchableOpacity>
 
-        {/* Texto de Rodapé / Link */}
+        {/* Rodapé / Link */}
         <Text style={styles.footerText}>
           Esqueceu a senha?{" "}
-          <Text style={styles.link} onPress={() => navigation.navigate("RedefinirSenha")}>
+          <Text 
+            style={styles.link} 
+            onPress={() => navigation.navigate("RedefinirSenha")}
+          >
             Clique aqui
           </Text>
         </Text>
@@ -150,103 +159,94 @@ export default function Login({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  // Fundo da Tela
   fullContainer: {
     flex: 1,
-    backgroundColor: "#11274d", // Azul escuro mais institucional
+    backgroundColor: "#11274d",
     justifyContent: "center",
     alignItems: "center",
   },
-  
-  // Card de Login
+
   loginCard: {
     width: "90%",
     maxWidth: 400,
-    backgroundColor: "#fff", // Fundo branco para destaque
-    borderRadius: 20, // Bordas mais arredondadas
+    backgroundColor: "#fff",
+    borderRadius: 20,
     padding: 30,
     alignItems: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 5,
-    elevation: 8, // Sombra para Android
+    elevation: 8,
   },
-  
+
   logo: {
-    width: 80,
-    height: 80,
-    marginBottom: 10,
-    // Estilo para deixar a logo circular ou com borda
-    borderRadius: 15, 
-    // Outras propriedades como sombra podem ser adicionadas aqui
+    width: 120,
+    height: 120,
+    marginBottom: 20,
+    borderRadius: 20,
   },
-  
+
   title: {
     fontSize: 26,
-    fontWeight: "800", // Mais negrito
-    color: "#11274d", 
+    fontWeight: "800",
+    color: "#11274d",
     marginBottom: 5,
   },
-  
+
   subtitle: {
     fontSize: 14,
     color: "#666",
     marginBottom: 30,
   },
 
-  // Container para Input (se for usar ícones, ajuda no layout)
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     width: "100%",
     height: 50,
-    backgroundColor: "#f0f0f0", // Fundo mais claro para o input
+    backgroundColor: "#f0f0f0",
     borderRadius: 12,
     marginBottom: 15,
-    // paddingHorizontal: 15, // Removido para dar espaço ao ícone
   },
 
   input: {
     flex: 1,
-    height: '100%',
-    paddingHorizontal: 15, // Ajustado para dar espaço visual
+    height: "100%",
+    paddingHorizontal: 15,
     color: "#11274d",
   },
 
-  // Botão Principal
   button: {
     width: "100%",
     height: 50,
-    backgroundColor: "#63b8ff", // Novo azul vibrante
+    backgroundColor: "#63b8ff",
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 20,
-    // Sombra sutil
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
   },
-  
+
   buttonText: {
-    color: "#fff", // Texto branco para contraste
+    color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
   },
-  
-  // Rodapé e Link
+
   footerText: {
     marginTop: 25,
     color: "#666",
     fontSize: 14,
   },
-  
+
   link: {
-    color: "#F2BE5B", // Cor de destaque para o link (Laranja/Amarelo)
-    textDecorationLine: "none", // Tirando o sublinhado para um visual mais limpo, mas pode manter
+    color: "#F2BE5B",
+    textDecorationLine: "none",
     fontWeight: "bold",
   },
 });
