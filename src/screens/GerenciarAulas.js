@@ -39,18 +39,7 @@ export default function GerenciarAulas({ navigation }) {
   const podeGerenciar =
     usuarioLogado?.tipo === "admin" || usuarioLogado?.tipo === "professor";
 
-  const handleLogout = async () => {
-    Alert.alert("Sair", "Deseja realmente sair?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Sair",
-        onPress: async () => {
-          await AsyncStorage.removeItem("usuarioLogado");
-          navigation.replace("Login");
-        },
-      },
-    ]);
-  };
+
 
   const carregarDadosEFiltrarTurmas = useCallback(async () => {
     setLoading(true);
@@ -349,10 +338,6 @@ export default function GerenciarAulas({ navigation }) {
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />
           <Text style={styles.backButtonText}>Turmas</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
 

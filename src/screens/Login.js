@@ -8,6 +8,9 @@ import dynamoDB from "../../awsConfig";
 import { ScanCommand } from "@aws-sdk/client-dynamodb";
 import bcrypt from "bcryptjs";
 
+// Importe se tiver ícones (ex: 'react-native-vector-icons/Feather')
+// import Icon from 'react-native-vector-icons/Feather';
+
 export default function Login({ navigation }) {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -83,91 +86,167 @@ export default function Login({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Image source={require("../assets/lyraback.png")} style={styles.logo} />
-      <Text style={styles.title}>Bem-vindo ao Lyra</Text>
+    <SafeAreaView style={styles.fullContainer}>
+      <View style={styles.loginCard}>
+        {/* Adicione a imagem ou logo se necessário, ou mantenha a original fora do card */}
+        <Image 
+          source={require("../assets/lyraback.png")} // Ajuste o caminho se necessário
+          style={styles.logo} 
+        />
+        <Text style={styles.title}>Bem-vindo</Text>
+        <Text style={styles.subtitle}>Faça login na sua conta Lyra</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        placeholderTextColor="#bbb"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Senha"
-        placeholderTextColor="#bbb"
-        value={senha}
-        onChangeText={setSenha}
-        secureTextEntry
-      />
+        {/* Campo de Email */}
+        <View style={styles.inputContainer}>
+          {/* Onde um Ícone iria, se fosse usar. Mantenha o estilo para alinhamento. */}
+          {/* <Icon name="mail" size={20} color="#888" style={styles.icon} /> */}
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor="#888"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+        </View>
 
-      <TouchableOpacity style={styles.button} onPress={fazerLogin} disabled={loading}>
-        {loading ? <ActivityIndicator color="#0a1e3f" /> : <Text style={styles.buttonText}>Entrar</Text>}
-      </TouchableOpacity>
+        {/* Campo de Senha */}
+        <View style={styles.inputContainer}>
+          {/* <Icon name="lock" size={20} color="#888" style={styles.icon} /> */}
+          <TextInput
+            style={styles.input}
+            placeholder="Senha"
+            placeholderTextColor="#888"
+            value={senha}
+            onChangeText={setSenha}
+            secureTextEntry
+          />
+        </View>
 
-      <Text style={styles.footerText}>
-        Esqueceu a senha?{" "}
-        <Text style={styles.link} onPress={() => navigation.navigate("RedefinirSenha")}>
-          Clique aqui
+        {/* Botão de Login */}
+        <TouchableOpacity 
+          style={styles.button} 
+          onPress={fazerLogin} 
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Entrar</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Texto de Rodapé / Link */}
+        <Text style={styles.footerText}>
+          Esqueceu a senha?{" "}
+          <Text style={styles.link} onPress={() => navigation.navigate("RedefinirSenha")}>
+            Clique aqui
+          </Text>
         </Text>
-      </Text>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  // Fundo da Tela
+  fullContainer: {
     flex: 1,
-    backgroundColor: "#63b8ff",
+    backgroundColor: "#11274d", // Azul escuro mais institucional
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
   },
+  
+  // Card de Login
+  loginCard: {
+    width: "90%",
+    maxWidth: 400,
+    backgroundColor: "#fff", // Fundo branco para destaque
+    borderRadius: 20, // Bordas mais arredondadas
+    padding: 30,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 8, // Sombra para Android
+  },
+  
   logo: {
-    width: 120,
-    height: 120,
+    width: 80,
+    height: 80,
+    marginBottom: 10,
+    // Estilo para deixar a logo circular ou com borda
+    borderRadius: 15, 
+    // Outras propriedades como sombra podem ser adicionadas aqui
+  },
+  
+  title: {
+    fontSize: 26,
+    fontWeight: "800", // Mais negrito
+    color: "#11274d", 
+    marginBottom: 5,
+  },
+  
+  subtitle: {
+    fontSize: 14,
+    color: "#666",
     marginBottom: 30,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#11274d",
-    marginBottom: 40,
-  },
-  input: {
+
+  // Container para Input (se for usar ícones, ajuda no layout)
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     width: "100%",
     height: 50,
-    backgroundColor: "#11274d",
+    backgroundColor: "#f0f0f0", // Fundo mais claro para o input
     borderRadius: 12,
-    paddingHorizontal: 15,
     marginBottom: 15,
-    color: "#fff",
+    // paddingHorizontal: 15, // Removido para dar espaço ao ícone
   },
+
+  input: {
+    flex: 1,
+    height: '100%',
+    paddingHorizontal: 15, // Ajustado para dar espaço visual
+    color: "#11274d",
+  },
+
+  // Botão Principal
   button: {
     width: "100%",
     height: 50,
-    backgroundColor: "#F2BE5B",
+    backgroundColor: "#63b8ff", // Novo azul vibrante
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 10,
+    marginTop: 20,
+    // Sombra sutil
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
+  
   buttonText: {
-    color: "#0a1e3f",
+    color: "#fff", // Texto branco para contraste
     fontSize: 18,
     fontWeight: "bold",
   },
+  
+  // Rodapé e Link
   footerText: {
-    marginTop: 20,
-    color: "#11274d",
+    marginTop: 25,
+    color: "#666",
+    fontSize: 14,
   },
+  
   link: {
-    color: "#11274d",
-    textDecorationLine: "underline",
+    color: "#F2BE5B", // Cor de destaque para o link (Laranja/Amarelo)
+    textDecorationLine: "none", // Tirando o sublinhado para um visual mais limpo, mas pode manter
     fontWeight: "bold",
   },
 });
